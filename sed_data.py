@@ -1,20 +1,22 @@
 import argparse
+from datetime import datetime
+import csv
+import json
 import os
 import sys
-import json
-import csv
-from datetime import datetime
+from collections.abc import Iterator
 
 import sed_api
 
-data_choices = ['escolas', 'unidades', 'classes', 'alunos', 'aluno', 'matriculas']
+data_choices = ['escolas', 'unidades', 'classes', 'alunos', 'aluno', 'matriculas', 'all-matriculas']
 
 parser = argparse.ArgumentParser(description='Extrai dados do SED.')
 
 parser.add_argument("--data", "-d", choices=data_choices, required=True, help="Tipo de dado a ser extraído")
+parser.add_argument("--output", "-o", required=True, help="Arquivo de saída de dados.")
 
 parser.add_argument("--cookie-sed", help="Cookie 'SED' para o domínio 'sed.educacao.sp.gov.br' autenticado em sua conta do SED. Alternativamente, utilize a variável de ambiente 'SED_DATA_COOKIE_SED'")
-parser.add_argument("--format", "-f", choices=["json", "csv"], default="json", help="Formato dos dados extraídos")
+parser.add_argument("--format", "-f", choices=["csv", "json"], default="csv", help="Formato dos dados extraídos (padrão: csv)")
 
 parser.add_argument('--escola-id', help="Usado para unidades, classes, alunos")
 parser.add_argument('--ano-letivo', default=str(datetime.now().year), help=f"Usado para classes, alunos (padrão: ano atual)")
@@ -59,19 +61,53 @@ match args.data:
 		if args.aluno_id == None:
 			parser.error("Error: --data matriculas needs --aluno-id")
 		result = sed_api.get_matriculas(auth, args.aluno_id)
+	case 'all-matriculas':
+		result = sed_api.get_all_matriculas(auth, args.ano_letivo)
 
 match args.format:
 	case 'json':
+		class IteratorAsList(list):
+			def __init__(self, iterator):
+				self.iterator = iterator
+				self._len = 1
+
+			def __iter__(self):
+				self._len = 0
+				for item in self.iterator:
+					yield item
+					self._len += 1
+
+			def __len__(self):
+				return self._len
+		
 		def json_encode(obj):
 			if isinstance(obj, datetime):
 				return obj.isoformat()
-			raise TypeError(f'Object of type {o.__class__.__name__} is not JSON serializable')
+			if isinstance(obj, Iterator):
+				return IteratorAsList(obj)
+			raise TypeError(f'Object of type {obj.__class__.__name__} is not JSON serializable')
 
-		print(json.dumps(result, indent='\t', default=json_encode))
+		with open(args.output, "w", encoding="utf-8") as f:
+			for chunk in json.JSONEncoder(indent='\t', default=json_encode).iterencode(result):
+				f.write(chunk)
+				f.flush()
+
 	case 'csv':
-		if not isinstance(result, list):
+		if not isinstance(result, list) and not isinstance(result, Iterator):
 			result = [result]
+		if not isinstance(result, Iterator):
+			result = iter(result)
+			
+		first_row = next(result)
 
-		writer = csv.DictWriter(sys.stdout, fieldnames=result[0].keys(), delimiter=";")
-		writer.writeheader()
-		writer.writerows(result)
+		with open(args.output, "w", encoding="utf-8-sig", newline="") as f:
+			writer = csv.DictWriter(f, fieldnames=first_row.keys(), delimiter=";")
+			writer.writeheader()
+			f.flush()
+
+			writer.writerow(first_row)
+			f.flush()
+
+			for row in result:
+				writer.writerow(row)
+				f.flush()

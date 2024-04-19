@@ -58,7 +58,7 @@ def get_classes(auth, ano_letivo, escola_id, unidade_id):
 		onclick = tr.find('a')['onclick']
 
 		classes.append({
-			# VisualizarClasse(<ano_letivo>, <escola_id>, <classe_id_a>)
+			# VisualizarClasse(<ano_letivo>, <escola_id>, <classe_id>)
 			'id': onclick.split('(')[1].split(')')[0].split(', ')[2],
 			'id_b': str(tr.find(class_='colnrClasse').string),
 			'descrição': str(tr.find(class_='colTurmaDes').string),
@@ -148,11 +148,11 @@ def get_matriculas(auth, aluno_id):
 		tds = tr.findAll('td')
 
 		matriculas.append({
+			'id': str(tds[4].string),
 			# 'ano': str(tds[0].string),
 			'diretoria': str(tds[1].string),
 			'município': str(tds[2].string),
 			'rede': str(tds[3].string),
-			'id': str(tds[4].string),
 			'escola_id': str(tds[5].string),
 			'escola_nome': str(tds[6].string),
 			'turno': str(tds[7].string),
@@ -168,3 +168,44 @@ def get_matriculas(auth, aluno_id):
 		})
 
 	return matriculas
+
+def get_all_matriculas(auth, ano_letivo, callback=None):
+	result_escolas = get_escolas(auth)
+	for escola in result_escolas:
+		result_unidades = get_unidades(auth, escola['id'])
+		for unidade in result_unidades:
+			result_classes = get_classes(auth, ano_letivo, escola['id'], unidade['id'])
+			for classe in result_classes:
+				result_alunos = get_alunos(auth, ano_letivo, escola['id'], classe['id'])
+				for aluno in result_alunos:
+					result_aluno = get_aluno(auth, aluno['id'])
+					result_matriculas = get_matriculas(auth, aluno['id'])
+
+					for matricula in result_matriculas:
+						final_escola = dict(escola)
+						final_escola['escola_id'] = final_escola.pop('id')
+						final_escola['escola_nome'] = final_escola.pop('nome')
+
+						final_unidade = dict(unidade)
+						final_unidade['unidade_id'] = final_unidade.pop('id')
+						final_unidade['unidade_nome'] = final_unidade.pop('nome')
+
+						final_classe = dict(classe)
+						final_classe['classe_id'] = final_classe.pop('id')
+						final_classe['classe_id_b'] = final_classe.pop('id_b')
+						final_classe['classe_descrição'] = final_classe.pop('descrição')
+
+						final_aluno = dict(aluno)
+						final_aluno['aluno_id'] = final_aluno.pop('id')
+
+						final_matricula = dict(matricula)
+						final_matricula['matricula_id'] = final_matricula.pop('id')
+
+						yield {
+							**final_escola,
+							**final_unidade,
+							**final_classe,
+							**final_aluno,
+							**result_aluno,
+							**final_matricula,
+						}
