@@ -42,15 +42,27 @@ def get_unidades(auth, escola_id):
 	return unidades
 
 def get_classes(auth, ano_letivo, escola_id, unidade_id):
-	response = requests.post('https://sed.educacao.sp.gov.br/NCA/matricula/ConsultaMatricula/Pesquisar',
+	page_session = requests.Session()
+
+	page_response = page_session.get('https://sed.educacao.sp.gov.br/NCA/Matricula/ConsultaMatricula/Index',
+		cookies=get_cookies(auth)
+		)
+
+	page_soup = BeautifulSoup(page_response.text, 'html.parser')
+	request_verification_token = page_soup.find('input', attrs={'name': '__RequestVerificationToken'})['value']
+
+	response = page_session.post('https://sed.educacao.sp.gov.br/NCA/matricula/ConsultaMatricula/Pesquisar',
 		cookies=get_cookies(auth),
 		data={
+			'__RequestVerificationToken': request_verification_token,
 			'anoLetivo': ano_letivo,
-			'codigoEscola': escola_id,
-			'codigoUnidade': unidade_id,
+			'codigoEscolaCIE': escola_id,
+			'codigoUnidadeCIE': unidade_id,
+			'tipoConsulta': 2,
 		})
 
 	soup = BeautifulSoup(response.text, 'html.parser')
+
 	trs = soup.tbody.findAll('tr')
 
 	classes = []
@@ -82,7 +94,8 @@ def get_alunos(auth, ano_letivo, escola_id, classe_id):
 
 	alunos = []
 	for tr in trs:
-		onclick = tr.findAll('td')[-3].a['onclick']
+		a = tr.select('td > a[onclick^="movimentacaoMatricula"]')[0] # ^= is starts with
+		onclick = a['onclick']
 
 		alunos.append({
 			# movimentacaoMatricula(aluno_id, ano_letivo, classe_id, matricula_id)
@@ -110,6 +123,7 @@ def get_aluno(auth, aluno_id):
 		'ra_dígito': str(soup.find(id="nrDigRa")['value']),
 		'nascimento_data': datetime.strptime(str(soup.find(id="DtNascimento")['value'][:10]), "%d/%m/%Y"),
 		'sexo': str(soup.find(id="Sexo")['value']),
+		'raça_cor': str(soup.find(id="DescricaoRacaCor")['value']),
 		'nome_mãe': str(soup.find(id="NomeMae")['value']),
 		'nome_pai': str(soup.find(id="NomePai")['value']),
 		'bolsa_família': True if soup.find(id="BolsaFamilia", checked=True) else False,
