@@ -117,29 +117,67 @@ def get_aluno(auth, aluno_id):
 
 	soup = BeautifulSoup(response.text, 'html.parser')
 
+	def achar_value(id):
+		e = soup.find(id=id)
+		return str(e['value']) if e else None
+
+	def achar_checkbox(id):
+		return True if soup.find(id=id, checked=True) else False
+
+	def achar_data(id):
+		v = soup.find(id=id)['value']
+		return datetime.strptime(str(v[:10]), "%d/%m/%Y") if v != '' else None
+
 	aluno = {
-		'nome': str(soup.find(id="NomeAluno")['value']),
-		'ra': str(soup.find(id="nrRA")['value']),
-		'ra_dígito': str(soup.find(id="nrDigRa")['value']),
-		'nascimento_data': datetime.strptime(str(soup.find(id="DtNascimento")['value'][:10]), "%d/%m/%Y"),
-		'sexo': str(soup.find(id="Sexo")['value']),
-		'raça_cor': str(soup.find(id="DescricaoRacaCor")['value']),
-		'nome_mãe': str(soup.find(id="NomeMae")['value']),
-		'nome_pai': str(soup.find(id="NomePai")['value']),
-		'bolsa_família': True if soup.find(id="BolsaFamilia", checked=True) else False,
-		'nascimento_cidade': str(soup.find(id="CidadeNascimento")['value']),
-		'nascimento_uf': str(soup.find(id="UFNascimento")['value']),
-		'certidão_data': datetime.strptime(str(soup.find(id="dtEmisRegNasc")['value'][:10]), "%d/%m/%Y") if soup.find(id="dtEmisRegNasc")['value'] != '' else None,
-		'certidão_número': str(soup.find(id="NumeroCertidaoNova")['value'] if soup.find(id="NumeroCertidaoNova") else None),
-		'endereço_cep': str(soup.find(id="EnderecoCEP")['value']),
-		'endereço': str(soup.find(id="Endereco")['value']),
-		'endereço_número': str(soup.find(id="EnderecoNR")['value']),
-		'endereço_complemento': str(soup.find(id="EnderecoComplemento")['value']),
-		'endereço_bairro': str(soup.find(id="EnderecoBairro")['value']),
-		'endereço_cidade': str(soup.find(id="EnderecoCidade")['value']),
-		'endereço_uf': str(soup.find(id="EnderecoUF")['value']),
-		'endereço_latitude': str(soup.find(id="Latitude")['value']),
-		'endereço_longitude': str(soup.find(id="Longitude")['value']),
+		'nome': achar_value("NomeAluno"),
+		'nome_social': achar_value("NomeSocial"),
+		'nome_afetivo': achar_value("NomeAfetivo"),
+		'ra': achar_value("nrRA"),
+		'ra_dígito': achar_value("nrDigRa"),
+		'nascimento_data': achar_data("DtNascimento"),
+		'sexo': achar_value("Sexo"),
+		'raça_cor': achar_value("DescricaoRacaCor"),
+		'tipo_sanguíneo': achar_value("TipoSanguineo"),
+		'falecimento': achar_checkbox("Falecimento"),
+		'email': achar_value("Email"),
+		'email_google': achar_value("EmailGoogle"),
+		'email_microsoft': achar_value("EmailMicrosoft"),
+		'nome_mãe': achar_value("NomeMae"),
+		'nome_pai': achar_value("NomePai"),
+		'bolsa_família': achar_checkbox("BolsaFamilia"),
+		'identificação_única_educacenso': achar_value("idAlunoMec"),
+		'nacionalidade': achar_value("CodigoNacionalidade"),
+		'nascimento_cidade': achar_value("CidadeNascimento"),
+		'nascimento_uf': achar_value("UFNascimento"),
+		'nascimento_país': achar_value("CodigoPaisNascimento"),
+		'quilombola': achar_checkbox("Quilombo"),
+		'possui_internet': achar_checkbox("INTERNETSIM"),
+		'possui_computador': achar_checkbox("SmartPessoalSIM"),
+		'cpf': achar_value("CpfAluno"),
+		'rg': achar_value("RgAluno"),
+		'rg_dígito': achar_value("DigRgAluno"),
+		'rg_uf': achar_value("sgUfRg"),
+		'rg_data': achar_data("dtEmisRg"),
+		'cin_data': achar_data("DataEmissaoCarteiraIdentidadeNacional"),
+		'rg_militar': achar_value("RgMilitarAluno"),
+		'rg_militar_dígito': achar_value("DigRgMilitarAluno"),
+		'nis': achar_value("NIS"),
+		'sus': achar_value("NumeroCNS"),
+		'entrada_no_brasil_data': achar_data("dtEntradaBrasil"),
+		'certidão_data': achar_data("dtEmisRegNasc"),
+		'certidão_número': achar_value("NumeroCertidaoNova"),
+		'deficiente': achar_checkbox("Deficiente"),
+		'endereço_cep': achar_value("EnderecoCEP"),
+		'endereço_tipo': achar_value("TipoLogradouro"),
+		'endereço_diferenciado': achar_value("LocalizacaoDiferenciada"),
+		'endereço': achar_value("Endereco"),
+		'endereço_número': achar_value("EnderecoNR"),
+		'endereço_complemento': achar_value("EnderecoComplemento"),
+		'endereço_bairro': achar_value("EnderecoBairro"),
+		'endereço_cidade': achar_value("EnderecoCidade"),
+		'endereço_uf': achar_value("EnderecoUF"),
+		'endereço_latitude': achar_value("Latitude"),
+		'endereço_longitude': achar_value("Longitude"),
 	}
 
 	return aluno
