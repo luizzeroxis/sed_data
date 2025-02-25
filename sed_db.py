@@ -305,6 +305,21 @@ def db_set_matrículas(cur, aluno_id, matrículas):
 			situação = EXCLUDED.situação
 	""").format(aluno_id), matrículas)
 
+def db_set_transporte_indicação(cur, aluno_id, transporte_indicação):
+	cur.execute(sql.SQL("""
+		INSERT INTO alunos (
+			sed_id,
+			transporte_indicação
+		) VALUES (
+			{},
+			%(transporte_indicação)s
+		) ON CONFLICT (sed_id) DO UPDATE SET
+			sed_id = EXCLUDED.sed_id,
+			transporte_indicação = EXCLUDED.transporte_indicação
+	""").format(aluno_id), {
+		'transporte_indicação': transporte_indicação,
+	})
+
 def db_set_escolas_from_matrículas():
 	pass
 
@@ -343,26 +358,28 @@ def update_all(ano_letivo=ano_atual):
 	
 	with psycopg.connect(postgres_url, autocommit=True) as conn:
 		with conn.cursor() as cur:
+			context = sed_api.start_context(auth)
+
 			print("sed_api.get_escolas")
-			escolas = sed_api.get_escolas(auth)
+			escolas = sed_api.get_escolas(context)
 			print("db_set_escolas", escolas)
 			db_set_escolas(cur, escolas)
 
 			for escola in escolas:
 				print("sed_api.get_unidades", escola['id'])
-				unidades = sed_api.get_unidades(auth, escola['id'])
+				unidades = sed_api.get_unidades(context, escola['id'])
 				print("db_set_unidades", escola['id'], unidades)
 				db_set_unidades(cur, escola['id'], unidades)
 
 				for unidade in unidades:
 					print("sed_api.get_classes", escola['id'], unidade['id'])
-					classes = sed_api.get_classes(auth, ano_letivo, escola['id'], unidade['id'])
+					classes = sed_api.get_classes(context, ano_letivo, escola['id'], unidade['id'])
 					print("db_set_classes", escola['id'], unidade['id'], classes)
 					db_set_classes(cur, escola['id'], unidade['id'], classes)
 
 					for classe in classes:
 						print("sed_api.get_alunos", escola['id'], classe['id'])
-						alunos_classe = sed_api.get_alunos(auth, ano_letivo, escola['id'], classe['id'])
+						alunos_classe = sed_api.get_alunos(context, ano_letivo, escola['id'], classe['id'])
 						print("db_set_alunos", alunos_classe)
 						db_set_alunos(cur, alunos_classe)
 
@@ -370,14 +387,19 @@ def update_all(ano_letivo=ano_atual):
 							print(repr(aluno_classe['id']))
 
 							print("sed_api.get_aluno", aluno_classe['id'])
-							aluno = sed_api.get_aluno(auth, aluno_classe['id'])
+							aluno = sed_api.get_aluno(context, aluno_classe['id'])
 							print("db_set_aluno", aluno_classe['id'], aluno)
 							db_set_aluno(cur, aluno_classe['id'], aluno)
 
 							print("sed_api.get_matriculas", aluno_classe['id'])
-							matrículas = sed_api.get_matriculas(auth, aluno_classe['id'])
+							matrículas = sed_api.get_matriculas(context, aluno_classe['id'])
 							print("db_set_matrículas", aluno_classe['id'], matrículas)
 							db_set_matrículas(cur, aluno_classe['id'], matrículas)
+
+							print("sed_api.get_transporte_indicação", aluno_classe['id'])
+							transporte_indicação = sed_api.get_transporte_indicação(context, aluno_classe['id'])
+							print("db_set_transporte_indicação", aluno_classe['id'], transporte_indicação)
+							db_set_transporte_indicação(cur, aluno_classe['id'], transporte_indicação)
 
 if __name__ == "__main__":
 	update_all()

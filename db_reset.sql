@@ -83,7 +83,8 @@ CREATE TABLE alunos (
 	endereço_cidade TEXT,
 	endereço_uf TEXT,
 	endereço_latitude TEXT,
-	endereço_longitude TEXT
+	endereço_longitude TEXT,
+	transporte_indicação TEXT
 );
 
 CREATE TABLE matrículas (
@@ -174,7 +175,8 @@ CREATE VIEW alunos_por_classe AS (
 		alunos.endereço_cidade,
 		alunos.endereço_uf,
 		alunos.endereço_latitude,
-		alunos.endereço_longitude
+		alunos.endereço_longitude,
+		alunos.transporte_indicação
 	FROM matrículas
 	LEFT JOIN alunos ON matrículas.aluno_id = alunos.sed_id
 	LEFT JOIN classes ON matrículas.classe_id = classes.sed_id_b

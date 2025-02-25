@@ -1,16 +1,40 @@
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+from dataclasses import dataclass
+import re
+
+@dataclass
+class SEDContext:
+	session: requests.Session
+	request_verification_token: str = ''
+	authorization: str = ''
+
+def start_context(auth):
+	session = requests.Session()
+	session.cookies.set('SED', auth['cookie_SED'])
+
+	# request_verification_token
+	response = session.get('https://sed.educacao.sp.gov.br/NCA/Matricula/ConsultaMatricula/Index')
+
+	soup = BeautifulSoup(response.text, 'html.parser')
+	request_verification_token = soup.find('input', attrs={'name': '__RequestVerificationToken'})['value']
+
+	# authorization
+	response = session.get("https://sed.educacao.sp.gov.br/NCA/FichaAluno/Consulta")
+
+	match = re.search(r'Execute\.Init\("(.*?)"', response.text)
+	authorization = match.group(1)
+
+	return SEDContext(session=session, request_verification_token=request_verification_token, authorization=authorization)
 
 def get_cookies(auth):
 	return {
 		'SED': auth['cookie_SED'],
 	}
 
-def get_escolas(auth):
-	response = requests.get('https://sed.educacao.sp.gov.br/nca/Matricula/ConsultaMatricula/DropDownEscolasCIEJson',
-		cookies=get_cookies(auth),
-	)
+def get_escolas(context):
+	response = context.session.get('https://sed.educacao.sp.gov.br/nca/Matricula/ConsultaMatricula/DropDownEscolasCIEJson')
 
 	json = response.json()
 
@@ -23,9 +47,8 @@ def get_escolas(auth):
 
 	return escolas
 
-def get_unidades(auth, escola_id):
-	response = requests.get('https://sed.educacao.sp.gov.br/nca/Matricula/ConsultaMatricula/DropDownUnidadesJson',
-		cookies=get_cookies(auth),
+def get_unidades(context, escola_id):
+	response = context.session.get('https://sed.educacao.sp.gov.br/nca/Matricula/ConsultaMatricula/DropDownUnidadesJson',
 		params=(
 			('escola', escola_id),
 		))
@@ -41,20 +64,10 @@ def get_unidades(auth, escola_id):
 
 	return unidades
 
-def get_classes(auth, ano_letivo, escola_id, unidade_id):
-	page_session = requests.Session()
-
-	page_response = page_session.get('https://sed.educacao.sp.gov.br/NCA/Matricula/ConsultaMatricula/Index',
-		cookies=get_cookies(auth)
-		)
-
-	page_soup = BeautifulSoup(page_response.text, 'html.parser')
-	request_verification_token = page_soup.find('input', attrs={'name': '__RequestVerificationToken'})['value']
-
-	response = page_session.post('https://sed.educacao.sp.gov.br/NCA/matricula/ConsultaMatricula/Pesquisar',
-		cookies=get_cookies(auth),
+def get_classes(context, ano_letivo, escola_id, unidade_id):
+	response = context.session.post('https://sed.educacao.sp.gov.br/NCA/matricula/ConsultaMatricula/Pesquisar',
 		data={
-			'__RequestVerificationToken': request_verification_token,
+			'__RequestVerificationToken': context.request_verification_token,
 			'anoLetivo': ano_letivo,
 			'codigoEscolaCIE': escola_id,
 			'codigoUnidadeCIE': unidade_id,
@@ -78,9 +91,8 @@ def get_classes(auth, ano_letivo, escola_id, unidade_id):
 
 	return classes
 
-def get_alunos(auth, ano_letivo, escola_id, classe_id):
-	response = requests.post('https://sed.educacao.sp.gov.br/NCA/Matricula/ConsultaMatricula/Visualizar',
-		cookies=get_cookies(auth),
+def get_alunos(context, ano_letivo, escola_id, classe_id):
+	response = context.session.post('https://sed.educacao.sp.gov.br/NCA/Matricula/ConsultaMatricula/Visualizar',
 		data={
 			'anoLetivo': ano_letivo,
 			'codigoEscola': escola_id,
@@ -108,9 +120,8 @@ def get_alunos(auth, ano_letivo, escola_id, classe_id):
 
 	return alunos
 
-def get_aluno(auth, aluno_id):
-	response = requests.post('https://sed.educacao.sp.gov.br/NCA/FichaAluno/FichaAluno',
-		cookies=get_cookies(auth),
+def get_aluno(context, aluno_id):
+	response = context.session.post('https://sed.educacao.sp.gov.br/NCA/FichaAluno/FichaAluno',
 		data={
 			'codigoAluno': aluno_id,
 		})
@@ -182,9 +193,8 @@ def get_aluno(auth, aluno_id):
 
 	return aluno
 
-def get_matriculas(auth, aluno_id):
-	response = requests.post('https://sed.educacao.sp.gov.br/NCA/FichaAluno/ConsultarMatriculaFichaAluno',
-		cookies=get_cookies(auth),
+def get_matriculas(context, aluno_id):
+	response = context.session.post('https://sed.educacao.sp.gov.br/NCA/FichaAluno/ConsultarMatriculaFichaAluno',
 		data={
 			'codigoAluno': aluno_id,
 			# consultaProgramas: "False",
@@ -221,17 +231,35 @@ def get_matriculas(auth, aluno_id):
 
 	return matriculas
 
-def get_all_matriculas(auth, ano_letivo, callback=None):
-	result_escolas = get_escolas(auth)
+def get_transporte_indicação(context, aluno_id):
+	response = context.session.post('https://sed.educacao.sp.gov.br/geo/fichaaluno/indicacao/listar',
+		headers = {
+			'Authorization': context.authorization,
+		},
+		data={
+			'codigo': aluno_id,
+			'editar': 'true',
+			'__RequestVerificationToken': context.request_verification_token,
+		})
+
+	with open('debug.html', 'w') as f: f.write(response.text)
+
+	json = response.json()
+
+	return json['data'][0]['StatusTransporte'] if len(json['data']) != 0 else None
+
+def get_all_matriculas(context, ano_letivo, callback=None):
+	result_escolas = get_escolas(context)
 	for escola in result_escolas:
-		result_unidades = get_unidades(auth, escola['id'])
+		result_unidades = get_unidades(context, escola['id'])
 		for unidade in result_unidades:
-			result_classes = get_classes(auth, ano_letivo, escola['id'], unidade['id'])
+			result_classes = get_classes(context, ano_letivo, escola['id'], unidade['id'])
 			for classe in result_classes:
-				result_alunos = get_alunos(auth, ano_letivo, escola['id'], classe['id'])
+				result_alunos = get_alunos(context, ano_letivo, escola['id'], classe['id'])
 				for aluno in result_alunos:
-					result_aluno = get_aluno(auth, aluno['id'])
-					result_matriculas = get_matriculas(auth, aluno['id'])
+					result_aluno = get_aluno(context, aluno['id'])
+					result_matriculas = get_matriculas(context, aluno['id'])
+					result_transporte_indicação = get_transporte_indicação(context, aluno['id'])
 
 					for matricula in result_matriculas:
 						final_escola = dict(escola)
@@ -260,4 +288,5 @@ def get_all_matriculas(auth, ano_letivo, callback=None):
 							**final_aluno,
 							**result_aluno,
 							**final_matricula,
+							'transporte_indicação': result_transporte_indicação,
 						}
